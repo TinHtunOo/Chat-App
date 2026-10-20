@@ -1,42 +1,71 @@
 import type { Server } from "node:http";
 import { Server as SocketServer } from "socket.io";
 import {
-  sendMessageSchema,
+  sendMessageInputSchema,
   type ClientToServerEvents,
   type Message,
   type ServerToClientEvents,
 } from "@chat/shared";
+import { env } from "./config/env.js";
 
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:5173";
+const roomChannel = (roomId: string) => `room:${roomId}`;
 
 export function setupSocket(httpServer: Server) {
   const io = new SocketServer<ClientToServerEvents, ServerToClientEvents>(
     httpServer,
     {
-      cors: { origin: CLIENT_ORIGIN },
+      cors: { origin: env.CLIENT_ORIGIN },
     },
   );
 
   io.on("connection", (socket) => {
     console.log(`socket connected: ${socket.id}`);
 
+    socket.on("room:join", ({ roomId }) => {
+      socket.join(roomChannel(roomId));
+    });
+
+    socket.on("room:leave", ({ roomId }) => {
+      socket.leave(roomChannel(roomId));
+    });
+
+    socket.on("typing:start", ({ roomId }) => {
+      socket.to(roomChannel(roomId)).emit("typing:update", {
+        roomId,
+        userId: socket.id,
+        username: "unknown",
+        isTyping: true,
+      });
+    });
+
+    socket.on("typing:stop", ({ roomId }) => {
+      socket.to(roomChannel(roomId)).emit("typing:update", {
+        roomId,
+        userId: socket.id,
+        username: "unknown",
+        isTyping: false,
+      });
+    });
+
     socket.on("message:send", (payload, ack) => {
-      const result = sendMessageSchema.safeParse(payload);
+      const result = sendMessageInputSchema.safeParse(payload);
 
       if (!result.success) {
-        console.warn("invalid message payload", result.error.flatten());
+        ack?.({ ok: false, error: "Invalid message payload" });
         return;
       }
-      // console.log("message:sent", result.data.text);
+
       const message: Message = {
         id: crypto.randomUUID(),
-        author: result.data.author,
+        roomId: result.data.roomId,
+        authorId: socket.id,
+        author: "unknown",
         text: result.data.text,
         createdAt: new Date().toISOString(),
       };
 
-      io.emit("message:new", message);
-      ack?.(message);
+      io.to(roomChannel(result.data.roomId)).emit("message:new", message);
+      ack?.({ ok: true, message });
     });
 
     socket.on("disconnect", () => {
