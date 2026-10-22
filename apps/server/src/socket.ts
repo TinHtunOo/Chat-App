@@ -7,19 +7,44 @@ import {
   type ServerToClientEvents,
 } from "@chat/shared";
 import { env } from "./config/env.js";
+import { verifyToken } from "./services/auth.service.js";
+
+interface SocketData {
+  user: { sub: string; username: string };
+}
 
 const roomChannel = (roomId: string) => `room:${roomId}`;
 
 export function setupSocket(httpServer: Server) {
-  const io = new SocketServer<ClientToServerEvents, ServerToClientEvents>(
-    httpServer,
-    {
-      cors: { origin: env.CLIENT_ORIGIN },
-    },
-  );
+  const io = new SocketServer<
+    ClientToServerEvents,
+    ServerToClientEvents,
+    Record<string, never>,
+    SocketData
+  >(httpServer, {
+    cors: { origin: env.CLIENT_ORIGIN },
+  });
+
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token;
+
+    if (typeof token !== "string" || !token) {
+      next(new Error("Unauthorized"));
+      return;
+    }
+
+    try {
+      const payload = verifyToken(token);
+      socket.data.user = { sub: payload.sub, username: payload.username };
+      next();
+    } catch {
+      next(new Error("Unauthorized"));
+    }
+  });
 
   io.on("connection", (socket) => {
-    console.log(`socket connected: ${socket.id}`);
+    const user = socket.data.user;
+    console.log(`socket connected: ${socket.id} (${user.username})`);
 
     socket.on("room:join", ({ roomId }) => {
       socket.join(roomChannel(roomId));
@@ -32,8 +57,8 @@ export function setupSocket(httpServer: Server) {
     socket.on("typing:start", ({ roomId }) => {
       socket.to(roomChannel(roomId)).emit("typing:update", {
         roomId,
-        userId: socket.id,
-        username: "unknown",
+        userId: user.sub,
+        username: user.username,
         isTyping: true,
       });
     });
@@ -41,8 +66,8 @@ export function setupSocket(httpServer: Server) {
     socket.on("typing:stop", ({ roomId }) => {
       socket.to(roomChannel(roomId)).emit("typing:update", {
         roomId,
-        userId: socket.id,
-        username: "unknown",
+        userId: user.sub,
+        username: user.username,
         isTyping: false,
       });
     });
@@ -58,8 +83,8 @@ export function setupSocket(httpServer: Server) {
       const message: Message = {
         id: crypto.randomUUID(),
         roomId: result.data.roomId,
-        authorId: socket.id,
-        author: "unknown",
+        authorId: user.sub,
+        author: user.username,
         text: result.data.text,
         createdAt: new Date().toISOString(),
       };
@@ -69,7 +94,7 @@ export function setupSocket(httpServer: Server) {
     });
 
     socket.on("disconnect", () => {
-      console.log(`socket disconnected: ${socket.id}`);
+      console.log(`socket disconnected: ${socket.id} (${user.username})`);
     });
   });
 

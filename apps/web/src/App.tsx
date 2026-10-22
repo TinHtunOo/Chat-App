@@ -1,12 +1,30 @@
-import { Chat } from "./components/Chat";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { RequireAuth } from "./components/RequireAuth";
+import { ChatPage } from "./pages/ChatPage";
+import { LoginPage } from "./pages/LoginPage";
+import { RegisterPage } from "./pages/RegisterPage";
+import { AuthProvider } from "./store/auth";
 import "./App.css";
 
 function App() {
   return (
-    <main className="app">
-      <h1>Chat</h1>
-      <Chat />
-    </main>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route
+            path="/chat"
+            element={
+              <RequireAuth>
+                <ChatPage />
+              </RequireAuth>
+            }
+          />
+          <Route path="*" element={<Navigate to="/chat" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

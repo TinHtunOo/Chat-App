@@ -1,24 +1,31 @@
 import { useEffect, useRef, useState } from "react";
 import type { Message } from "@chat/shared";
-import { socket } from "../lib/socket";
+import { createSocket } from "../lib/socket";
 
 export function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const listRef = useRef<HTMLUListElement>(null);
+  const socketRef = useRef<ReturnType<typeof createSocket> | null>(null);
   const roomId = "lobby";
 
   useEffect(() => {
+    const socket = createSocket();
+    socketRef.current = socket;
+
     function onNewMessage(message: Message) {
       setMessages((prev) => [...prev, message]);
     }
 
     socket.on("message:new", onNewMessage);
+    socket.connect();
     socket.emit("room:join", { roomId });
 
     return () => {
-      socket.off("message:new", onNewMessage);
       socket.emit("room:leave", { roomId });
+      socket.off("message:new", onNewMessage);
+      socket.disconnect();
+      socketRef.current = null;
     };
   }, [roomId]);
 
@@ -35,11 +42,15 @@ export function Chat() {
       return;
     }
 
-    socket.emit("message:send", { roomId, text: trimmedText }, (result) => {
-      if (!result.ok) {
-        console.error("send failed:", result.error);
-      }
-    });
+    socketRef.current?.emit(
+      "message:send",
+      { roomId, text: trimmedText },
+      (result) => {
+        if (!result.ok) {
+          console.error("send failed:", result.error);
+        }
+      },
+    );
 
     setText("");
   }

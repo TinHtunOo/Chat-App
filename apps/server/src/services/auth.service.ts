@@ -88,3 +88,9 @@ export function verifyToken(token: string): JwtPayload {
     throw new AuthError("Invalid or expired token", 401);
   }
 }
+
+export async function getUserById(id: string): Promise<User | null> {
+  const user = await prisma.user.findUnique({ where: { id } });
+
+  return user ? toPublicUser(user) : null;
+}
