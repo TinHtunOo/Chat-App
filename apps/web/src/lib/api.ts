@@ -35,7 +35,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       ...options.headers,
     },
   });
-
+ 
   const body = await res.json().catch(() => null);
 
   if (!res.ok) {
