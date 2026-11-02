@@ -17,3 +17,10 @@ export const sendMessageInputSchema = z.object({
 });
 
 export type SendMessageInput = z.infer<typeof sendMessageInputSchema>;
+
+export const getMessagesQuerySchema = z.object({
+  // query values arrive as strings, so coerce to a number
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+export type GetMessagesQuery = z.infer<typeof getMessagesQuerySchema>;

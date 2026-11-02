@@ -9,6 +9,12 @@ export const userSchema = z.object({
 
 export type User = z.infer<typeof userSchema>;
 
+export const searchUsersQuerySchema = z.object({
+  q: z.string().trim().min(2).max(30),
+});
+
+export type SearchUsersQuery = z.infer<typeof searchUsersQuerySchema>;
+
 export const registerInputSchema = z.object({
   username: z.string().min(3).max(50),
   email: z.string().email(),

@@ -4,6 +4,8 @@ import { env } from "./config/env.js";
 import { prisma } from "./config/db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { authRouter } from "./routes/auth.routes.js";
+import { userRouter } from "./routes/user.routes.js";
+import { roomRouter } from "./routes/room.routes.js";
 
 export const app = express();
 
@@ -12,7 +14,7 @@ app.use(express.json());
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
-}); 
+});
 
 app.get("/health/db", async (_req, res) => {
   try {
@@ -25,5 +27,7 @@ app.get("/health/db", async (_req, res) => {
 });
 
 app.use("/auth", authRouter);
+app.use("/users", userRouter);
+app.use("/rooms", roomRouter);
 
 app.use(errorHandler);

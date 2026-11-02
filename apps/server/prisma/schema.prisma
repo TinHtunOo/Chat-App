@@ -21,9 +21,16 @@ model User {
   @@map("users")
 }
 
+enum RoomType {
+  DIRECT
+  GROUP
+}
+
 model Room {
   id        String   @id @default(cuid())
-  name      String
+  name      String?
+  type      RoomType @default(GROUP)
+  directKey String?  @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -43,6 +50,7 @@ model RoomMember {
   room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roomId])
+  @@index([roomId])
   @@map("room_members")
 }
 
