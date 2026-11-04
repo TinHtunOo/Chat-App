@@ -23,14 +23,18 @@ export async function isRoomMember(
 export async function findOrCreateDirectRoom(
   userId: string,
   targetId: string,
-): Promise<{ room: Room; created: boolean }> {
+): Promise<{
+  room: Room;
+  created: boolean;
+  target: { id: string; username: string };
+}> {
   if (userId === targetId) {
     throw new BadRequestError("You can't start a chat with yourself");
   }
 
   const target = await prisma.user.findUnique({
     where: { id: targetId },
-    select: { id: true },
+    select: { id: true, username: true },
   });
   if (!target) {
     throw new NotFoundError("User not found");
@@ -41,7 +45,7 @@ export async function findOrCreateDirectRoom(
 
   const existing = await prisma.room.findUnique({ where: { directKey } });
   if (existing) {
-    return { room: toRoomDto(existing), created: false };
+    return { room: toRoomDto(existing), created: false, target };
   }
 
   try {
@@ -55,7 +59,7 @@ export async function findOrCreateDirectRoom(
         },
       },
     });
-    return { room: toRoomDto(room), created: true };
+    return { room: toRoomDto(room), created: true, target };
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -63,7 +67,7 @@ export async function findOrCreateDirectRoom(
     ) {
       const room = await prisma.room.findUnique({ where: { directKey } });
       if (room) {
-        return { room: toRoomDto(room), created: false };
+        return { room: toRoomDto(room), created: false, target };
       }
     }
     throw error;
@@ -176,4 +180,12 @@ export async function saveMessage(
   });
 
   return toMessageDto(result);
+}
+
+export async function getUserRoomIds(userId: string): Promise<string[]> {
+  const memberships = await prisma.roomMember.findMany({
+    where: { userId },
+    select: { roomId: true },
+  });
+  return memberships.map((m) => m.roomId);
 }

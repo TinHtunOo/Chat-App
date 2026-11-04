@@ -1,33 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { Message } from "@chat/shared";
-import { createSocket } from "../lib/socket";
 
-export function Chat() {
-  const [messages, setMessages] = useState<Message[]>([]);
+type Props = {
+  title: string;
+  messages: Message[];
+  connected: boolean;
+  onSend: (text: string) => void;
+};
+
+export function Chat({ title, messages, connected, onSend }: Props) {
   const [text, setText] = useState("");
   const listRef = useRef<HTMLUListElement>(null);
-  const socketRef = useRef<ReturnType<typeof createSocket> | null>(null);
-  const roomId = "lobby";
-
-  useEffect(() => {
-    const socket = createSocket();
-    socketRef.current = socket;
-
-    function onNewMessage(message: Message) {
-      setMessages((prev) => [...prev, message]);
-    }
-
-    socket.on("message:new", onNewMessage);
-    socket.connect();
-    socket.emit("room:join", { roomId });
-
-    return () => {
-      socket.emit("room:leave", { roomId });
-      socket.off("message:new", onNewMessage);
-      socket.disconnect();
-      socketRef.current = null;
-    };
-  }, [roomId]);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
@@ -35,33 +18,23 @@ export function Chat() {
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-
-    const trimmedText = text.trim();
-
-    if (!trimmedText) {
-      return;
-    }
-
-    socketRef.current?.emit(
-      "message:send",
-      { roomId, text: trimmedText },
-      (result) => {
-        if (!result.ok) {
-          console.error("send failed:", result.error);
-        }
-      },
-    );
-
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    onSend(trimmed);
     setText("");
   }
 
   return (
     <div className="chat">
+      <header className="chat-header">
+        {title} {!connected && <small>(reconnecting...)</small>}
+      </header>
+
       <ul className="chat-messages" ref={listRef}>
-        {messages.map((message) => (
-          <li key={message.id} className="chat-message">
-            <strong>{message.author}</strong>
-            <span>{message.text}</span>
+        {messages.map((m) => (
+          <li key={m.id} className="chat-message">
+            <strong>{m.author}</strong>
+            <span>{m.text}</span>
           </li>
         ))}
       </ul>
@@ -70,11 +43,13 @@ export function Chat() {
         <input
           type="text"
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(e) => setText(e.target.value)}
           placeholder="Type a message"
           maxLength={2000}
         />
-        <button type="submit">Send</button>
+        <button type="submit" disabled={!connected}>
+          Send
+        </button>
       </form>
     </div>
   );

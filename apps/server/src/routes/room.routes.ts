@@ -15,6 +15,7 @@ import {
   CreateDirectRoomInput,
 } from "@chat/shared";
 import { toRoomDto } from "../helper/mapper.js";
+import { notifyRoomCreated } from "../helper/realtime.js";
 
 const roomRouter = Router();
 
@@ -53,11 +54,23 @@ roomRouter.post(
     try {
       const { targetUserId } = req.body as CreateDirectRoomInput;
 
-      const { room, created } = await findOrCreateDirectRoom(
+      const { room, created, target } = await findOrCreateDirectRoom(
         req.user!.sub,
         targetUserId,
       );
 
+      if (created) {
+        try {
+          notifyRoomCreated(
+            room,
+            { id: req.user!.sub, username: req.user!.username },
+            target, // { id, username }
+          );
+        } catch (error) {
+          // the room exists either way; the client can recover via GET /rooms
+          console.error("notifyRoomCreated failed:", error);
+        }
+      }
       res.status(created ? 201 : 200).json({
         room,
         created,

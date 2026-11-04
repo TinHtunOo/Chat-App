@@ -1,9 +1,12 @@
 import type {
   AuthResponse,
   LoginInput,
+  Message,
   RegisterInput,
+  RoomListItem,
   User,
 } from "@chat/shared";
+
 import { getToken } from "./token";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
@@ -35,7 +38,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       ...options.headers,
     },
   });
- 
+
   const body = await res.json().catch(() => null);
 
   if (!res.ok) {
@@ -64,3 +67,10 @@ export const api = {
 
   me: () => request<{ user: User }>("/auth/me"),
 };
+
+export const fetchRooms = () => request<RoomListItem[]>("/rooms");
+
+export const fetchMessages = (roomId: string) =>
+  request<{ messages: Message[]; hasMore: boolean }>(
+    `/rooms/${roomId}/messages`,
+  );

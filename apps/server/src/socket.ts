@@ -8,12 +8,16 @@ import {
 } from "@chat/shared";
 import { env } from "./config/env.js";
 import { verifyToken } from "./services/auth.service.js";
+import {
+  getUserRoomIds,
+  isRoomMember,
+  saveMessage,
+} from "./services/room.service.js";
+import { roomChannel } from "./helper/realtime.js";
 
 interface SocketData {
   user: { sub: string; username: string };
 }
-
-const roomChannel = (roomId: string) => `room:${roomId}`;
 
 export function setupSocket(httpServer: Server) {
   const io = new SocketServer<
@@ -42,55 +46,88 @@ export function setupSocket(httpServer: Server) {
     }
   });
 
-  io.on("connection", (socket) => {
+  io.on("connection", async (socket) => {
     const user = socket.data.user;
     console.log(`socket connected: ${socket.id} (${user.username})`);
 
-    socket.on("room:join", ({ roomId }) => {
-      socket.join(roomChannel(roomId));
+    socket.join(`user:${user.sub}`);
+
+    try {
+      const roomIds = await getUserRoomIds(user.sub);
+      socket.join(roomIds.map(roomChannel));
+    } catch (error) {
+      console.error("auto-join failed:", error);
+    }
+
+    socket.on("room:join", async (payload) => {
+      const roomId = payload?.roomId;
+      if (typeof roomId !== "string" || !roomId) return;
+      try {
+        if (await isRoomMember(roomId, user.sub)) {
+          socket.join(roomChannel(roomId));
+        }
+      } catch (error) {
+        console.error("room-join failed:", error);
+      }
     });
 
     socket.on("room:leave", ({ roomId }) => {
       socket.leave(roomChannel(roomId));
     });
 
-    socket.on("typing:start", ({ roomId }) => {
-      socket.to(roomChannel(roomId)).emit("typing:update", {
-        roomId,
-        userId: user.sub,
-        username: user.username,
-        isTyping: true,
-      });
+    socket.on("typing:start", async (payload) => {
+      const roomId = payload?.roomId;
+      if (typeof roomId !== "string" || !roomId) return;
+      try {
+        if (await isRoomMember(roomId, user.sub)) {
+          socket.to(roomChannel(roomId)).emit("typing:update", {
+            roomId,
+            userId: user.sub,
+            username: user.username,
+            isTyping: true,
+          });
+        }
+      } catch (error) {
+        console.error("typing-start failed:", error);
+      }
     });
 
-    socket.on("typing:stop", ({ roomId }) => {
-      socket.to(roomChannel(roomId)).emit("typing:update", {
-        roomId,
-        userId: user.sub,
-        username: user.username,
-        isTyping: false,
-      });
+    socket.on("typing:stop", async (payload) => {
+      const roomId = payload?.roomId;
+      if (typeof roomId !== "string" || !roomId) return;
+      try {
+        if (await isRoomMember(roomId, user.sub)) {
+          socket.to(roomChannel(roomId)).emit("typing:update", {
+            roomId,
+            userId: user.sub,
+            username: user.username,
+            isTyping: false,
+          });
+        }
+      } catch (error) {
+        console.error("typing-stop failed:", error);
+      }
     });
 
-    socket.on("message:send", (payload, ack) => {
+    socket.on("message:send", async (payload, ack) => {
       const result = sendMessageInputSchema.safeParse(payload);
-
       if (!result.success) {
         ack?.({ ok: false, error: "Invalid message payload" });
         return;
       }
 
-      const message: Message = {
-        id: crypto.randomUUID(),
-        roomId: result.data.roomId,
-        authorId: user.sub,
-        author: user.username,
-        text: result.data.text,
-        createdAt: new Date().toISOString(),
-      };
-
-      io.to(roomChannel(result.data.roomId)).emit("message:new", message);
-      ack?.({ ok: true, message });
+      try {
+        const message = await saveMessage(
+          result.data.roomId,
+          user.sub,
+          result.data.text,
+        );
+        io.to(roomChannel(message.roomId)).emit("message:new", message);
+        ack?.({ ok: true, message });
+      } catch (error) {
+        console.error("message:send failed:", error);
+        ack?.({ ok: false, error: "Could not send message" });
+      }
     });
 
     socket.on("disconnect", () => {

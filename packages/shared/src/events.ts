@@ -1,4 +1,5 @@
 import type { Message, SendMessageInput } from "./schemas/message.js";
+import { RoomListItem } from "./schemas/room.js";
 
 export type MessageAck =
   | { ok: true; message: Message }
@@ -23,4 +24,5 @@ export interface ServerToClientEvents {
     username: string;
     isTyping: boolean;
   }) => void;
+  "room:created": (room: RoomListItem) => void;
 }
