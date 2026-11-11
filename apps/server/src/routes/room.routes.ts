@@ -14,7 +14,6 @@ import {
   createDirectRoomInputSchema,
   CreateDirectRoomInput,
 } from "@chat/shared";
-import { toRoomDto } from "../helper/mapper.js";
 import { notifyRoomCreated } from "../helper/realtime.js";
 
 const roomRouter = Router();

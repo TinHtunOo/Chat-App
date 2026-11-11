@@ -1,10 +1,12 @@
 import type {
   AuthResponse,
+  CreateDirectRoomResponse,
   LoginInput,
   Message,
   RegisterInput,
   RoomListItem,
   User,
+  UserSearchResult,
 } from "@chat/shared";
 
 import { getToken } from "./token";
@@ -74,3 +76,12 @@ export const fetchMessages = (roomId: string) =>
   request<{ messages: Message[]; hasMore: boolean }>(
     `/rooms/${roomId}/messages`,
   );
+
+export const searchUsers = (q: string) =>
+  request<UserSearchResult[]>(`/users/search?q=${encodeURIComponent(q)}`);
+
+export const createDirectRoom = (targetUserId: string) =>
+  request<CreateDirectRoomResponse>("/rooms/direct", {
+    method: "POST",
+    body: JSON.stringify({ targetUserId }),
+  });

@@ -1,9 +1,5 @@
+import { UserSearchResult } from "@chat/shared";
 import { prisma } from "../config/db.js";
-
-export type UserSearchResult = {
-  id: string;
-  username: string;
-};
 
 export async function searchUsers(
   query: string,

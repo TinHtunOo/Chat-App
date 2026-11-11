@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { boolean } from "zod/v4";
 
 // Mirrors the Prisma RoomType enum
 export const roomTypeSchema = z.enum(["DIRECT", "GROUP"]);
@@ -51,3 +52,12 @@ export const roomIdParamsSchema = z.object({
 });
 
 export type RoomIdParams = z.infer<typeof roomIdParamsSchema>;
+
+export const createDirectRoomResponseSchema = z.object({
+  room: roomSchema,
+  created: z.boolean(),
+});
+
+export type CreateDirectRoomResponse = z.infer<
+  typeof createDirectRoomResponseSchema
+>;

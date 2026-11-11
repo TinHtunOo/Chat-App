@@ -43,3 +43,10 @@ export const authResponseSchema = z.object({
 });
 
 export type AuthResponse = z.infer<typeof authResponseSchema>;
+
+export const userSearchSchema = z.object({
+  id: z.string(),
+  username: z.string(),
+});
+
+export type UserSearchResult = z.infer<typeof userSearchSchema>;

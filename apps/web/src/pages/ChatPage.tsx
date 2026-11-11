@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Message, RoomListItem } from "@chat/shared";
+import type { Message, RoomListItem, UserSearchResult } from "@chat/shared";
 import { useSocket } from "../hooks/useSocket";
-import { fetchMessages, fetchRooms } from "../lib/api";
+import { createDirectRoom, fetchMessages, fetchRooms } from "../lib/api";
 import { Chat } from "../components/Chat";
 import { useAuth } from "../store/auth";
-import { Sidebar } from "../components/SideBar";
+import { Sidebar } from "../components/Sidebar";
+import { useTyping } from "../hooks/useTyping";
 
 // ADJUST: get these from your auth state
 // const { token, user } = useAuth();
@@ -25,9 +26,9 @@ function mergeMessages(a: Message[], b: Message[]): Message[] {
 }
 
 export function ChatPage() {
-  const { token, user } = useAuth(); // ADJUST
+  const { token, user, logout } = useAuth(); // ADJUST
   const { socket, connected } = useSocket(token);
-
+  const { typingByRoom, clearTyping } = useTyping(socket, user?.id ?? "");
   const [rooms, setRooms] = useState<RoomListItem[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [messagesByRoom, setMessagesByRoom] = useState<
@@ -68,6 +69,8 @@ export function ChatPage() {
     if (!socket || !token) return;
 
     function onMessageNew(message: Message) {
+      clearTyping(message.roomId, message.authorId);
+
       setMessagesByRoom((prev) => ({
         ...prev,
         [message.roomId]: mergeMessages(prev[message.roomId] ?? [], [message]),
@@ -125,14 +128,42 @@ export function ChatPage() {
     [socket, selectedRoomId],
   );
 
+  const handleTyping = useCallback(
+    (isTyping: boolean) => {
+      if (!socket || !selectedRoomId) return;
+      socket.emit(isTyping ? "typing:start" : "typing:stop", {
+        roomId: selectedRoomId,
+      });
+    },
+    [socket, selectedRoomId],
+  );
+
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId) ?? null;
 
+  const handleStartChat = useCallback(async (user: UserSearchResult) => {
+    const { room } = await createDirectRoom(user.id); // throws on failure; SearchBar catches
+
+    const item: RoomListItem = {
+      ...room,
+      otherUser: { id: user.id, username: user.username },
+      lastMessage: null,
+    };
+
+    setRooms((prev) =>
+      prev.some((r) => r.id === room.id) ? prev : sortRooms([...prev, item]),
+    );
+    setSelectedRoomId(room.id);
+  }, []);
   return (
     <div className="chat-page">
       <Sidebar
         rooms={rooms}
         selectedRoomId={selectedRoomId}
+        username={user?.username ?? ""}
         onSelect={setSelectedRoomId}
+        onLogout={logout}
+        onStartChat={handleStartChat}
+        // typingByRoom={typingByRoom}
       />
 
       {selectedRoom ? (
@@ -142,8 +173,11 @@ export function ChatPage() {
             selectedRoom.otherUser?.username ?? selectedRoom.name ?? "Chat"
           }
           messages={messagesByRoom[selectedRoom.id] ?? []}
+          currentUserId={user?.id ?? ""}
           connected={connected}
           onSend={handleSend}
+          onTyping={handleTyping}
+          typingNames={Object.values(typingByRoom[selectedRoom.id] ?? {})}
         />
       ) : (
         <div className="chat-empty">
